@@ -1,0 +1,555 @@
+name: MelodyPulse Repository Structure
+
+repository:
+  - path: "build.gradle.kts"
+    content: |
+      plugins {
+          alias(libs.plugins.android.application) apply false
+          alias(libs.plugins.kotlin.android) apply false
+      }
+
+  - path: "settings.gradle.kts"
+    content: |
+      pluginManagement {
+          repositories {
+              google()
+              mavenCentral()
+              gradlePluginPortal()
+          }
+      }
+      dependencyResolutionManagement {
+          repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+          repositories {
+              google()
+              mavenCentral()
+          }
+      }
+
+      rootProject.name = "MelodyPulse"
+      include(":app")
+
+  - path: "README.md"
+    content: |
+      # MelodyPulse 🎶
+
+      MelodyPulse is a modern, fully functional local music player Android application built with **Jetpack Compose**, **Material 3**, and **AndroidX Media3 (ExoPlayer)**. It features an immersive Cyberpunk Neon Dark theme.
+
+      ## Features
+      - **Local Audio Scanning:** Automatically detects and indexes local music files on your device using `MediaStore` (compatible with Android 10 up to Android 14+).
+      - **ExoPlayer Integration:** Smooth audio streaming and robust background playback.
+      - **Cyberpunk UI Theme:** Deep dark backgrounds with glowing neon purple and electric cyan highlights.
+      - **Interactive Controls:** Includes a mini-player bottom bar, full-screen player view with animated vinyl disc styling, and time scrubbing.
+
+      ## Tech Stack
+      - **Kotlin** & **Jetpack Compose**
+      - **Material 3**
+      - **AndroidX Media3 (ExoPlayer)**
+
+  - path: "app/build.gradle.kts"
+    content: |
+      plugins {
+          alias(libs.plugins.android.application)
+          alias(libs.plugins.kotlin.android)
+      }
+
+      android {
+          namespace = "com.example.melodypulse"
+          compileSdk = 34
+
+          defaultConfig {
+              applicationId = "com.example.melodypulse"
+              minSdk = 24
+              targetSdk = 34
+              versionCode = 1
+              versionName = "1.0"
+
+              testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+              vectorDrawables {
+                  useSupportLibrary = true
+              }
+          }
+
+          buildTypes {
+              release {
+                  isMinifyEnabled = false
+                  proguardFiles(
+                      getDefaultProguardFile("proguard-android-optimize.txt"),
+                      "proguard-rules.pro"
+                  )
+              }
+          }
+          compileOptions {
+              sourceCompatibility = JavaVersion.VERSION_1_8
+              targetCompatibility = JavaVersion.VERSION_1_8
+          }
+          kotlinOptions {
+              jvmTarget = "1.8"
+          }
+          buildFeatures {
+              compose = true
+          }
+          composeOptions {
+              kotlinCompilerExtensionVersion = "1.5.1"
+          }
+          packaging {
+              resources {
+                  excludes += "/META-INF/{AL2.0,LGPL2.1}"
+              }
+          }
+      }
+
+      dependencies {
+          implementation("androidx.core:core-ktx:1.13.1")
+          implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
+          implementation("androidx.activity:activity-compose:1.9.1")
+          implementation(platform("androidx.compose:compose-bom:2024.06.00"))
+          implementation("androidx.compose.ui:ui")
+          implementation("androidx.compose.ui:ui-graphics")
+          implementation("androidx.compose.ui:ui-tooling-preview")
+          implementation("androidx.compose.material3:material3:1.2.1")
+          implementation("androidx.compose.material:material-icons-extended")
+          
+          // Media3 ExoPlayer
+          implementation("androidx.media3:media3-exoplayer:1.4.0")
+          implementation("androidx.media3:media3-session:1.4.0")
+      }
+
+  - path: "app/src/main/AndroidManifest.xml"
+    content: |
+      <?xml version="1.0" encoding="utf-8"?>
+      <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+          <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+          <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+          <application
+              android:allowBackup="true"
+              android:icon="@mipmap/ic_launcher"
+              android:label="MelodyPulse"
+              android:roundIcon="@mipmap/ic_launcher_round"
+              android:supportsRtl="true"
+              android:theme="@style/Theme.MelodyPulse">
+              <activity
+                  android:name=".MainActivity"
+                  android:exported="true"
+                  android:theme="@style/Theme.MelodyPulse">
+                  <intent-filter>
+                      <action android:name="android.intent.action.MAIN" />
+                      <category android:name="android.intent.category.LAUNCHER" />
+                  </intent-filter>
+              </activity>
+          </application>
+
+      </manifest>
+
+  - path: "app/src/main/java/com/example/melodypulse/model/Song.kt"
+    content: |
+      package com.example.melodypulse.model
+
+      import android.net.Uri
+
+      data class Song(
+          val id: Long,
+          val title: String,
+          val artist: String,
+          val album: String,
+          val duration: Long,
+          val uri: Uri,
+          val albumArtUri: Uri?
+      )
+
+  - path: "app/src/main/java/com/example/melodypulse/data/MusicRepository.kt"
+    content: |
+      package com.example.melodypulse.data
+
+      import android.content.ContentUris
+      import android.content.Context
+      import android.net.Uri
+      import android.provider.MediaStore
+      import com.example.melodypulse.model.Song
+      import kotlinx.coroutines.Dispatchers
+      import kotlinx.coroutines.withContext
+
+      class MusicRepository(private val context: Context) {
+
+          suspend fun fetchDeviceSongs(): List<Song> = withContext(Dispatchers.IO) {
+              val songList = mutableListOf<Song>()
+              val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+
+              val projection = arrayOf(
+                  MediaStore.Audio.Media._ID,
+                  MediaStore.Audio.Media.TITLE,
+                  MediaStore.Audio.Media.ARTIST,
+                  MediaStore.Audio.Media.ALBUM,
+                  MediaStore.Audio.Media.DURATION,
+                  MediaStore.Audio.Media.ALBUM_ID
+              )
+
+              val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+              val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
+
+              context.contentResolver.query(
+                  collection,
+                  projection,
+                  selection,
+                  null,
+                  sortOrder
+              )?.use { cursor ->
+                  val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                  val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                  val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                  val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                  val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                  val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+
+                  while (cursor.moveToNext()) {
+                      val id = cursor.getLong(idColumn)
+                      val title = cursor.getString(titleColumn) ?: "Unknown Title"
+                      val artist = cursor.getString(artistColumn) ?: "Unknown Artist"
+                      val album = cursor.getString(albumColumn) ?: "Unknown Album"
+                      val duration = cursor.getLong(durationColumn)
+                      
+                      if (duration < 30000) continue
+
+                      val contentUri = ContentUris.withAppendedId(
+                          MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                          id
+                      )
+                      
+                      val albumId = cursor.getLong(albumIdColumn)
+                      val albumArtUri = ContentUris.withAppendedId(
+                          Uri.parse("content://media/external/audio/albumart"),
+                          albumId
+                      )
+
+                      songList.add(
+                          Song(
+                              id = id,
+                              title = title,
+                              artist = artist,
+                              album = album,
+                              duration = duration,
+                              uri = contentUri,
+                              albumArtUri = albumArtUri
+                          )
+                      )
+                  }
+              }
+              songList
+          }
+      }
+
+  - path: "app/src/main/java/com/example/melodypulse/ui/theme/Theme.kt"
+    content: |
+      package com.example.melodypulse.ui.theme
+
+      import androidx.compose.material3.MaterialTheme
+      import androidx.compose.material3.darkColorScheme
+      import androidx.compose.runtime.Composable
+      import androidx.compose.ui.graphics.Color
+
+      val NeonPurple = Color(0xFFBD00FF)
+      val ElectricCyan = Color(0xFF00F0FF)
+      val DarkBackground = Color(0xFF0A0A12)
+      val SurfaceDark = Color(0xFF141421)
+      val SurfaceVariantDark = Color(0xFF1F1F33)
+      val TextPrimary = Color(0xFFF0F0FF)
+      val TextSecondary = Color(0xFF9E9EB8)
+
+      private val DarkColorScheme = darkColorScheme(
+          primary = NeonPurple,
+          secondary = ElectricCyan,
+          background = DarkBackground,
+          surface = SurfaceDark,
+          surfaceVariant = SurfaceVariantDark,
+          onPrimary = Color.White,
+          onSecondary = Color.Black,
+          onBackground = TextPrimary,
+          onSurface = TextPrimary,
+          onSurfaceVariant = TextSecondary
+      )
+
+      @Composable
+      fun MelodyPulseTheme(content: @Composable () -> Unit) {
+          MaterialTheme(
+              colorScheme = DarkColorScheme,
+              content = content
+          )
+      }
+
+  - path: "app/src/main/java/com/example/melodypulse/MainActivity.kt"
+    content: |
+      package com.example.melodypulse
+
+      import android.Manifest
+      import android.content.pm.PackageManager
+      import android.os.Build
+      import android.os.Bundle
+      import androidx.activity.ComponentActivity
+      import androidx.activity.compose.setContent
+      import androidx.activity.result.contract.ActivityResultContracts
+      import androidx.compose.foundation.background
+      import androidx.compose.foundation.clickable
+      import androidx.compose.foundation.layout.*
+      import androidx.compose.foundation.lazy.LazyColumn
+      import androidx.compose.foundation.lazy.itemsIndexed
+      import androidx.compose.foundation.shape.CircleShape
+      import androidx.compose.foundation.shape.RoundedCornerShape
+      import androidx.compose.material.icons.Icons
+      import androidx.compose.material.icons.filled.*
+      import androidx.compose.material3.*
+      import androidx.compose.runtime.*
+      import androidx.compose.ui.Alignment
+      import androidx.compose.ui.Modifier
+      import androidx.compose.ui.draw.clip
+      import androidx.compose.ui.graphics.Brush
+      import androidx.compose.ui.graphics.Color
+      import androidx.compose.ui.platform.ContextCompat
+      import androidx.compose.ui.text.font.FontWeight
+      import androidx.compose.ui.text.style.TextOverflow
+      import androidx.compose.ui.unit.dp
+      import androidx.compose.ui.unit.sp
+      import androidx.media3.common.MediaItem
+      import androidx.media3.common.Player
+      import androidx.media3.exoplayer.ExoPlayer
+      import com.example.melodypulse.data.MusicRepository
+      import com.example.melodypulse.model.Song
+      import com.example.melodypulse.ui.theme.MelodyPulseTheme
+      import kotlinx.coroutines.delay
+      import kotlinx.coroutines.launch
+
+      class MainActivity : ComponentActivity() {
+
+          private lateinit var exoPlayer: ExoPlayer
+          private val musicRepository by lazy { MusicRepository(this) }
+
+          private var _songs = mutableStateOf<List<Song>>(emptyList())
+          val songs: State<List<Song>> = _songs
+
+          private val permissionLauncher = registerForActivityResult(
+              ActivityResultContracts.RequestPermission()
+          ) { isGranted ->
+              if (isGranted) {
+                  loadMusic()
+              }
+          }
+
+          override fun onCreate(savedInstanceState: Bundle?) {
+              super.onCreate(savedInstanceState)
+              exoPlayer = ExoPlayer.Builder(this).build()
+
+              checkAndRequestPermission()
+
+              setContent {
+                  MelodyPulseTheme {
+                      Surface(
+                          modifier = Modifier.fillMaxSize(),
+                          color = MaterialTheme.colorScheme.background
+                      ) {
+                          MainScreen(exoPlayer = exoPlayer, songs = songs.value) {
+                              checkAndRequestPermission()
+                          }
+                      }
+                  }
+              }
+          }
+
+          private fun checkAndRequestPermission() {
+              val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                  Manifest.permission.READ_MEDIA_AUDIO
+              } else {
+                  Manifest.permission.READ_EXTERNAL_STORAGE
+              }
+
+              when {
+                  ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED -> {
+                      loadMusic()
+                  }
+                  else -> {
+                      permissionLauncher.launch(permission)
+                  }
+              }
+          }
+
+          private fun loadMusic() {
+              val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main)
+              scope.launch {
+                  _songs.value = musicRepository.fetchDeviceSongs()
+              }
+          }
+
+          override fun onDestroy() {
+              super.onDestroy()
+              exoPlayer.release()
+          }
+      }
+
+      @OptIn(ExperimentalMaterial3Api::class)
+      @Composable
+      fun MainScreen(exoPlayer: ExoPlayer, songs: List<Song>, onRequestPermission: () -> Unit) {
+          var currentSongIndex by remember { mutableStateOf<Int?>(null) }
+          var isPlaying by remember { mutableStateOf(false) }
+          var currentPosition by remember { mutableStateOf(0L) }
+          var totalDuration by remember { mutableStateOf(0L) }
+          var showFullPlayer by remember { mutableStateOf(false) }
+
+          DisposableEffect(exoPlayer) {
+              val listener = object : Player.Listener {
+                  override fun onIsPlayingChanged(playing: Boolean) {
+                      isPlaying = playing
+                  }
+                  override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                      currentSongIndex = exoPlayer.currentMediaItemIndex
+                  }
+              }
+              exoPlayer.addListener(listener)
+              onDispose { exoPlayer.removeListener(listener) }
+          }
+
+          LaunchedEffect(isPlaying) {
+              while (isPlaying) {
+                  currentPosition = exoPlayer.currentPosition
+                  totalDuration = exoPlayer.duration.coerceAtLeast(0L)
+                  delay(500)
+              }
+          }
+
+          fun playSong(index: Int) {
+              if (songs.isEmpty()) return
+              currentSongIndex = index
+              val song = songs[index]
+              exoPlayer.setMediaItem(MediaItem.fromUri(song.uri))
+              exoPlayer.prepare()
+              exoPlayer.play()
+          }
+
+          Scaffold(
+              topBar = {
+                  TopAppBar(
+                      title = {
+                          Row(verticalAlignment = Alignment.CenterVertically) {
+                              Box(
+                                  modifier = Modifier
+                                      .size(10.dp)
+                                      .clip(CircleShape)
+                                      .background(MaterialTheme.colorScheme.secondary)
+                              )
+                              Spacer(modifier = Modifier.width(10.dp))
+                              Text("MelodyPulse", fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                          }
+                      },
+                      actions = {
+                          IconButton(onClick = onRequestPermission) {
+                              Icon(Icons.Default.Refresh, contentDescription = "Scan Music")
+                          }
+                      },
+                      colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                  )
+              },
+              bottomBar = {
+                  if (currentSongIndex != null && songs.isNotEmpty()) {
+                      val activeSong = songs[currentSongIndex!!]
+                      MiniPlayerBar(
+                          song = activeSong,
+                          isPlaying = isPlaying,
+                          onPlayPauseToggle = {
+                              if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                          },
+                          onOpenPlayer = { showFullPlayer = true }
+                      )
+                  }
+              }
+          ) { innerPadding ->
+              Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                  if (songs.isEmpty()) {
+                      Column(
+                          modifier = Modifier.fillMaxSize().padding(32.dp),
+                          verticalArrangement = Arrangement.Center,
+                          horizontalAlignment = Alignment.CenterHorizontally
+                      ) {
+                          Icon(
+                              Icons.Default.MusicNote,
+                              contentDescription = null,
+                              modifier = Modifier.size(64.dp),
+                              tint = MaterialTheme.colorScheme.secondary
+                          )
+                          Spacer(modifier = Modifier.height(16.dp))
+                          Text("No local music found or permission needed.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                          Spacer(modifier = Modifier.height(16.dp))
+                          Button(onClick = onRequestPermission, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                              Text("Grant Permission / Rescan")
+                          }
+                      }
+                  } else {
+                      LazyColumn(
+                          modifier = Modifier.fillMaxSize(),
+                          contentPadding = PaddingValues(vertical = 12.dp)
+                      ) {
+                          itemsIndexed(songs) { index, song ->
+                              SongListItem(
+                                  song = song,
+                                  isSelected = currentSongIndex == index,
+                                  onClick = { playSong(index) }
+                              )
+                          }
+                      }
+                  }
+
+                  if (showFullPlayer && currentSongIndex != null) {
+                      FullPlayerScreen(
+                          song = songs[currentSongIndex!!],
+                          isPlaying = isPlaying,
+                          currentPosition = currentPosition,
+                          totalDuration = totalDuration,
+                          onPlayPause = {
+                              if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                          },
+                          onNext = {
+                              if (currentSongIndex!! < songs.size - 1) playSong(currentSongIndex!! + 1)
+                          },
+                          onPrevious = {
+                              if (currentSongIndex!! > 0) playSong(currentSongIndex!! - 1)
+                          },
+                          onSeek = { position ->
+                              exoPlayer.seekTo(position)
+                          },
+                          onClose = { showFullPlayer = false }
+                      )
+                  }
+              }
+          }
+      }
+
+      @Composable
+      fun SongListItem(song: Song, isSelected: Boolean, onClick: () -> Unit) {
+          val backgroundColor = if (isSelected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent
+          val textColor = if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
+
+          Row(
+              modifier = Modifier
+                  .fillMaxWidth()
+                  .clickable(onClick = onClick)
+                  .background(backgroundColor)
+                  .padding(horizontal = 16.dp, vertical = 12.dp),
+              verticalAlignment = Alignment.CenterVertically
+          ) {
+              Box(
+                  modifier = Modifier
+                      .size(48.dp)
+                      .clip(RoundedCornerShape(8.dp))
+                      .background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary))),
+                  contentAlignment = Alignment.Center
+              ) {
+                  Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.Black)
+              }
+              Spacer(modifier = Modifier.width(16.dp))
+              Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                      text = song.title,
+                      color = textColor,
+                      fontWeight = FontWeight.Bold,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis,
+                      fontSize = 16.sp
+                  )
+                  Spacer(modifier = Modifier.height
